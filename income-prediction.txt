@@ -1,0 +1,66 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import Imputer
+from sklearn.preprocessing import LabelEncoder
+from sklearn.pipeline import make_pipeline
+from xgboost import XGBClassifier
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import accuracy_score
+from sklearn import model_selection
+from xgboost import plot_importance
+from sklearn.feature_selection import SelectFromModel
+from numpy import sort
+
+data=pd.read_csv(r"C:\Users\DIXIT\Desktop\Hand Written image dataset\income.txt",sep=",",names=['AGE','WORKCLASS','FINAL-WEIGHT','EDUCATION','EDUCATION-DEGREES','MARITAL_STATUS','OCCUPATION','RELATIONSHIP','RACE','GENDER','CAPITAL-GAIN','CAPITAL-LOSS','HOURS-PER-WEEK','COUNTRY','GROSS-INCOME'])
+data.head()
+data.info()
+data.isnull().sum()
+features=data.drop('GROSS-INCOME',axis=1)
+label=data['GROSS-INCOME']
+features.columns
+features.head()
+lis=features.select_dtypes(include=[object]).columns.values
+lis
+lb=LabelEncoder()
+for x in lis:
+    features[x]=lb.fit_transform(features[x].astype(str))
+features.head()
+missing_col=[col for col in features.columns if features[col].isnull().any()]
+for x in missing_col:
+    features[x]=features[x].fillna(features[x].value_counts().index[0])
+    
+##filling missing values with mode value of that column
+label.head()
+label=lb.fit_transform(label.astype(str))
+print("is label: ",label)
+x_train,x_test,y_train,y_test=model_selection.train_test_split(features,label,test_size=0.2)
+x_train.shape
+x_test.shape
+y_train.shape
+y_test.shape
+feature_names=features.columns
+model=XGBClassifier(n_estimators=1000,learning_rate=0.5)
+model.fit(x_train,y_train,early_stopping_rounds=5, 
+             eval_set=[(x_test,y_test)])
+print(model.feature_importances_)
+plot_importance(model)
+plt.show()
+thresholds=sort(model.feature_importances_)
+thresholds
+accuracy_list=[]
+for thresh in thresholds:
+    selection=SelectFromModel(model,threshold=thresh,prefit=True)
+    selected_trainfeatures=selection.transform(x_train)
+    mod=XGBClassifier()
+    mod.fit(selected_trainfeatures,y_train)
+    selected_testfeatures=selection.transform(x_test)
+    
+    pred=mod.predict(selected_testfeatures)
+    print("Accuracy score for thresh=%.3f and no. of features=%d is %.2f"%(thresh,selected_testfeatures.shape[1],accuracy_score(y_test,pred)*100) )  
+    accuracy_list.append([accuracy_score(y_test,pred)*100,selected_testfeatures.shape[1],thresh])
+    plot_importance(mod)
+    plt.show()
+max_accuracy,req_features,req_thresh=max(accuracy_list,key=lambda item:item[0])
+    
+print("Max Accuracy achieved:{} and the number of features:{}".format(max_accuracy,req_features))
